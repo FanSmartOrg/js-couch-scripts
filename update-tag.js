@@ -1,72 +1,57 @@
-const NodeCouchDb = require('node-couchdb');
-const fs = require('fs');
 
-export const getNewTagSingleSelection = (tagList, tagToUpdate) => {
-  const [tk] = tagToUpdate.split(':');
-  const existingTags = [];
-  const newTagList = tagList.filter((tag) => {
-    const [k] = tag.split(':');
-    if (k === tk) {
-      existingTags.push(tag);
-      return false;
-    }
-
-    return true;
-  });
-
-  if (existingTags.length > 0) {
-    if (!existingTags.find(tag => tag !== tagToUpdate)) {
-      return undefined;
-    }
+class UpdateTag {
+  constructor(couch, dbName) {
+    this.couch = couch;
+    this.dbName = dbName;
   }
 
-  newTagList.push(tagToUpdate);
-  return newTagList;
-};
+  static getNewTagSingleSelection(tagList, tagToUpdate) {
+    const [tk] = tagToUpdate.split(':');
+    const existingTags = [];
+    const newTagList = tagList.filter((tag) => {
+      const [k] = tag.split(':');
+      if (k === tk) {
+        existingTags.push(tag);
+        return false;
+      }
 
-export const getNewTagMultiSelection = (tagList, tagToUpdate) => {
-  const existingTags = [];
-  const newTagList = tagList.filter((tag) => {
-    if (tag === tagToUpdate) {
-      existingTags.push(tag);
-      return false;
+      return true;
+    });
+
+    if (existingTags.length > 0) {
+      if (!existingTags.find(tag => tag !== tagToUpdate)) {
+        return undefined;
+      }
     }
 
-    return true;
-  });
+    newTagList.push(tagToUpdate);
+    return newTagList;
+  }
 
-  if (existingTags.length > 0) {
-    if (!existingTags.find(tag => tag !== tagToUpdate)) {
-      return undefined;
+  static getNewTagMultiSelection(tagList, tagToUpdate) {
+    const existingTags = [];
+    const newTagList = tagList.filter((tag) => {
+      if (tag === tagToUpdate) {
+        existingTags.push(tag);
+        return false;
+      }
+
+      return true;
+    });
+
+    if (existingTags.length > 0) {
+      if (!existingTags.find(tag => tag !== tagToUpdate)) {
+        return undefined;
+      }
     }
+
+    newTagList.push(tagToUpdate);
+    return newTagList;
   }
 
-  newTagList.push(tagToUpdate);
-  return newTagList;
-};
-
-(() => {
-  if (process.argv.length < 5) {
-    console.warn('Please call with username password dbname.');
-    return;
-  }
-
-  const DB_NAME = process.argv[4];
-
-  // node-couchdb instance talking to external service
-  const couch = new NodeCouchDb({
-    host: 'localhost',
-    protocol: 'http',
-    port: 5984,
-    auth: {
-      user: process.argv[2],
-      pass: process.argv[3],
-    },
-  });
-
-  const updateDoc = (docWithOldRev) => {
+  updateDoc(docWithOldRev) {
     // console.log(docWithOldRev);
-    couch.update(DB_NAME, docWithOldRev).then(({ status }) => {
+    this.couch.update(this.dbName, docWithOldRev).then(({ status }) => {
       // data is json response
       // headers is an object with all response headers
       // status is statusCode number
@@ -78,10 +63,10 @@ export const getNewTagMultiSelection = (tagList, tagToUpdate) => {
       // ...or err.code=EUNKNOWN if statusCode is unexpected
       console.error(err);
     });
-  };
+  }
 
-  const getNode = (nodeId, callback) => {
-    couch.get(DB_NAME, nodeId).then(({ data }) => {
+  getNode(nodeId, callback) {
+    this.couch.get(this.dbName, nodeId).then(({ data }) => {
       // data is json response
       // headers is an object with all response headers
       // status is statusCode number
@@ -93,47 +78,51 @@ export const getNewTagMultiSelection = (tagList, tagToUpdate) => {
       // ...or err.code=EUNKNOWN if statusCode is unexpected
       console.error(err);
     });
-  };
+  }
 
-  const updateTag = (nodeDoc, tag) => {
+  updateTag(nodeDoc, tag) {
     const newData = JSON.parse(JSON.stringify(nodeDoc));
-    const newTags = getNewTagSingleSelection(newData.tags, tag);
+    const newTags = UpdateTag.getNewTagSingleSelection(newData.tags, tag);
 
     if (newTags) {
       newData.tags = newTags;
-      updateDoc(newData);
+      this.updateDoc(newData);
     }
-  };
+  }
 
-  const updateParentTag = (nodeDoc, tag) => {
+  updateParentTag(nodeDoc, tag) {
     const newData = JSON.parse(JSON.stringify(nodeDoc));
-    const newTags = getNewTagMultiSelection(newData.tags, tag);
+    const newTags = UpdateTag.getNewTagMultiSelection(newData.tags, tag);
 
     if (newTags) {
       newData.tags = newTags;
-      updateDoc(newData);
+      this.updateDoc(newData);
     }
-  };
+  }
 
-  const pidSet = new Set();
-  const listOfNodes = JSON.parse(fs.readFileSync('./tags-input.json', 'utf8'));
-  listOfNodes.forEach((node) => {
-    setTimeout(() => {
-      getNode(node.id, (nodeDoc) => {
-        updateTag(nodeDoc, node.tag);
+  process(listOfNodes) {
+    const pidSet = new Set();
 
-        // Need to go through path here.
-        if (nodeDoc.path && nodeDoc.path.length) {
-          nodeDoc.path.forEach((pid) => {
-            if (!pidSet.has(pid + node.tag)) {
-              pidSet.add(pid + node.tag);
-              getNode(pid, (parentNodeDoc) => {
-                updateParentTag(parentNodeDoc, node.tag);
-              });
-            }
-          });
-        }
-      });
-    }, 200);
-  });
-})();
+    listOfNodes.forEach((node) => {
+      setTimeout(() => {
+        this.getNode(node.id, (nodeDoc) => {
+          this.updateTag(nodeDoc, node.tag);
+
+          // Need to go through path here.
+          if (nodeDoc.path && nodeDoc.path.length) {
+            nodeDoc.path.forEach((pid) => {
+              if (!pidSet.has(pid + node.tag)) {
+                pidSet.add(pid + node.tag);
+                this.getNode(pid, (parentNodeDoc) => {
+                  this.updateParentTag(parentNodeDoc, node.tag);
+                });
+              }
+            });
+          }
+        });
+      }, 200);
+    });
+  }
+}
+
+module.exports = UpdateTag;
