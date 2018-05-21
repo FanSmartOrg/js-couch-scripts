@@ -125,8 +125,8 @@ export const getNewTagMultiSelection = (tagList, tagToUpdate) => {
         // Need to go through path here.
         if (nodeDoc.path && nodeDoc.path.length) {
           nodeDoc.path.forEach((pid) => {
-            if (!pidSet.has(pid)) {
-              pidSet.add(pid);
+            if (!pidSet.has(pid + node.tag)) {
+              pidSet.add(pid + node.tag);
               getNode(pid, (parentNodeDoc) => {
                 updateParentTag(parentNodeDoc, node.tag);
               });
