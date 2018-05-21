@@ -5,6 +5,17 @@ class UpdateTag {
     this.dbName = dbName;
   }
 
+  static getNewTagList(filteredList, existingTags, newTag) {
+    if (existingTags.length > 0) {
+      if (!existingTags.find(tag => tag !== newTag)) {
+        return undefined;
+      }
+    }
+
+    filteredList.push(newTag);
+    return filteredList;
+  }
+
   static getNewTagSingleSelection(tagList, tagToUpdate) {
     const [tk] = tagToUpdate.split(':');
     const existingTags = [];
@@ -18,14 +29,7 @@ class UpdateTag {
       return true;
     });
 
-    if (existingTags.length > 0) {
-      if (!existingTags.find(tag => tag !== tagToUpdate)) {
-        return undefined;
-      }
-    }
-
-    newTagList.push(tagToUpdate);
-    return newTagList;
+    return UpdateTag.getNewTagList(newTagList, existingTags, tagToUpdate);
   }
 
   static getNewTagMultiSelection(tagList, tagToUpdate) {
@@ -39,14 +43,7 @@ class UpdateTag {
       return true;
     });
 
-    if (existingTags.length > 0) {
-      if (!existingTags.find(tag => tag !== tagToUpdate)) {
-        return undefined;
-      }
-    }
-
-    newTagList.push(tagToUpdate);
-    return newTagList;
+    return UpdateTag.getNewTagList(newTagList, existingTags, tagToUpdate);
   }
 
   updateDoc(docWithOldRev) {
@@ -80,24 +77,22 @@ class UpdateTag {
     });
   }
 
-  updateTag(nodeDoc, tag) {
+  applyNewTagsToDoc(nodeDoc, newTags) {
     const newData = JSON.parse(JSON.stringify(nodeDoc));
-    const newTags = UpdateTag.getNewTagSingleSelection(newData.tags, tag);
-
     if (newTags) {
       newData.tags = newTags;
       this.updateDoc(newData);
     }
   }
 
-  updateParentTag(nodeDoc, tag) {
-    const newData = JSON.parse(JSON.stringify(nodeDoc));
-    const newTags = UpdateTag.getNewTagMultiSelection(newData.tags, tag);
+  updateTag(nodeDoc, tag) {
+    const newTags = UpdateTag.getNewTagSingleSelection(nodeDoc.tags, tag);
+    this.applyNewTagsToDoc(nodeDoc, newTags);
+  }
 
-    if (newTags) {
-      newData.tags = newTags;
-      this.updateDoc(newData);
-    }
+  updateParentTag(nodeDoc, tag) {
+    const newTags = UpdateTag.getNewTagMultiSelection(nodeDoc.tags, tag);
+    this.applyNewTagsToDoc(nodeDoc, newTags);
   }
 
   process(listOfNodes) {
@@ -111,6 +106,7 @@ class UpdateTag {
           // Need to go through path here.
           if (nodeDoc.path && nodeDoc.path.length) {
             nodeDoc.path.forEach((pid) => {
+              // Optimize for tree.
               if (!pidSet.has(pid + node.tag)) {
                 pidSet.add(pid + node.tag);
                 this.getNode(pid, (parentNodeDoc) => {
