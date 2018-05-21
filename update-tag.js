@@ -118,20 +118,22 @@ export const getNewTagMultiSelection = (tagList, tagToUpdate) => {
   const pidSet = new Set();
   const listOfNodes = JSON.parse(fs.readFileSync('./tags-input.json', 'utf8'));
   listOfNodes.forEach((node) => {
-    getNode(node.id, (nodeDoc) => {
-      updateTag(nodeDoc, node.tag);
+    setTimeout(() => {
+      getNode(node.id, (nodeDoc) => {
+        updateTag(nodeDoc, node.tag);
 
-      // Need to go through path here.
-      if (nodeDoc.path && nodeDoc.path.length) {
-        nodeDoc.path.forEach((pid) => {
-          if (!pidSet.has(pid)) {
-            pidSet.add(pid);
-            getNode(node.id, (parentNodeDoc) => {
-              updateParentTag(parentNodeDoc, node.tag);
-            });
-          }
-        });
-      }
-    });
+        // Need to go through path here.
+        if (nodeDoc.path && nodeDoc.path.length) {
+          nodeDoc.path.forEach((pid) => {
+            if (!pidSet.has(pid)) {
+              pidSet.add(pid);
+              getNode(node.id, (parentNodeDoc) => {
+                updateParentTag(parentNodeDoc, node.tag);
+              });
+            }
+          });
+        }
+      });
+    }, 200);
   });
 })();
