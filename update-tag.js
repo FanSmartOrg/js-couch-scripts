@@ -1,12 +1,33 @@
 const NodeCouchDb = require('node-couchdb');
 const fs = require('fs');
 
-const getNewTagSingleSelection = (tagList, tagToUpdate) => {
+export const getNewTagSingleSelection = (tagList, tagToUpdate) => {
   const [tk] = tagToUpdate.split(':');
   const existingTags = [];
   const newTagList = tagList.filter((tag) => {
     const [k] = tag.split(':');
     if (k === tk) {
+      existingTags.push(tag);
+      return false;
+    }
+
+    return true;
+  });
+
+  if (existingTags.length > 0) {
+    if (!existingTags.find(tag => tag !== tagToUpdate)) {
+      return undefined;
+    }
+  }
+
+  newTagList.push(tagToUpdate);
+  return newTagList;
+};
+
+export const getNewTagMultiSelection = (tagList, tagToUpdate) => {
+  const existingTags = [];
+  const newTagList = tagList.filter((tag) => {
+    if (tag === tagToUpdate) {
       existingTags.push(tag);
       return false;
     }
@@ -74,18 +95,43 @@ const getNewTagSingleSelection = (tagList, tagToUpdate) => {
     });
   };
 
+  const updateTag = (nodeDoc, tag) => {
+    const newData = JSON.parse(JSON.stringify(nodeDoc));
+    const newTags = getNewTagSingleSelection(newData.tags, tag);
+
+    if (newTags) {
+      newData.tags = newTags;
+      updateDoc(newData);
+    }
+  };
+
+  const updateParentTag = (nodeDoc, tag) => {
+    const newData = JSON.parse(JSON.stringify(nodeDoc));
+    const newTags = getNewTagMultiSelection(newData.tags, tag);
+
+    if (newTags) {
+      newData.tags = newTags;
+      updateDoc(newData);
+    }
+  };
+
+  const pidSet = new Set();
   const listOfNodes = JSON.parse(fs.readFileSync('./tags-input.json', 'utf8'));
   listOfNodes.forEach((node) => {
-    getNode(node.id, (data) => {
-      const newData = JSON.parse(JSON.stringify(data));
-      const newTags = getNewTagSingleSelection(newData.tags, node.tag);
+    getNode(node.id, (nodeDoc) => {
+      updateTag(nodeDoc, node.tag);
 
-      if (newTags) {
-        newData.tags = newTags;
-        updateDoc(newData);
+      // Need to go through path here.
+      if (nodeDoc.path && nodeDoc.path.length) {
+        nodeDoc.path.forEach((pid) => {
+          if (!pidSet.has(pid)) {
+            pidSet.add(pid);
+            getNode(node.id, (parentNodeDoc) => {
+              updateParentTag(parentNodeDoc, node.tag);
+            });
+          }
+        });
       }
     });
   });
 })();
-
-export default getNewTagSingleSelection;
