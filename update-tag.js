@@ -107,6 +107,7 @@ class UpdateTag {
           if (nodeDoc.path && nodeDoc.path.length) {
             nodeDoc.path.forEach((pid) => {
               // Optimize for tree.
+              // TODO: need fix.
               if (!pidSet.has(pid + node.tag)) {
                 pidSet.add(pid + node.tag);
                 this.getNode(pid, (parentNodeDoc) => {
